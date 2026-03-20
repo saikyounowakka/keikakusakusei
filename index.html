@@ -599,6 +599,47 @@
             border-left: 3px solid var(--red);
         }
 
+        /* ===== スマートフォン・タブレット向けレスポンシブ対応 ===== */
+        @media (max-width: 600px) {
+            .form-row {
+                flex-direction: column;
+                gap: 0;
+            }
+            header {
+                padding: 12px 16px;
+                flex-direction: column;
+                align-items: stretch;
+                gap: 12px;
+            }
+            .header-actions {
+                justify-content: flex-end;
+                flex-wrap: wrap;
+            }
+            main {
+                padding: 16px 12px;
+            }
+            .task-grid {
+                grid-template-columns: 1fr;
+            }
+            .modal {
+                width: 95%;
+                padding: 20px;
+            }
+            #toast-container {
+                width: 90%;
+                left: 50%;
+                bottom: 16px;
+            }
+            .toast {
+                white-space: normal;
+                word-break: break-all;
+                font-size: .8rem;
+                padding: 10px 14px;
+            }
+            .today-card {
+                padding: 16px;
+            }
+        }
         .toast.info {
             border-left: 3px solid var(--accent);
         }
@@ -841,14 +882,33 @@
             return null;
         }
 
+        async function syncUnlinkedTasks() {
+            if (!googleToken) return;
+            const tasks = JSON.parse(localStorage.getItem('hw_tasks') || '[]');
+            const calIds = getCalEventIds();
+            let syncCount = 0;
+            for (const task of tasks) {
+                // まだ一度もカレンダーと同期していないタスクを登録する
+                if (!calIds[task.task_id] && task.total_pages > task.completed_pages) {
+                    await autoSyncCalendar(task.task_id, null, false);
+                    syncCount++;
+                }
+            }
+            if (syncCount > 0) {
+                showToast(`🔄 ${syncCount}件の未連携タスクをGoogleカレンダーに同期しました`, 'success');
+                updateSyncBadges();
+            }
+        }
+
         /** 連携済みUI状態にする共通処理 */
-        function setConnectedUI() {
+        async function setConnectedUI() {
             const btn = document.getElementById('btn-gcal-login');
             btn.textContent = '✅ カレンダー連携済み';
             btn.disabled = true;
             const calSec = document.getElementById('cal-section');
             if (calSec) calSec.style.display = 'block';
             updateSyncBadges();
+            await syncUnlinkedTasks();
         }
 
         /** Googleカレンダー認証（手動ボタン押下時） */
