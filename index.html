@@ -1,0 +1,1582 @@
+<!DOCTYPE html>
+<html lang="ja">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>宿題トラッカー</title>
+
+    <!-- PyScript -->
+    <link rel="stylesheet" href="https://pyscript.net/releases/2024.11.1/core.css">
+    <script type="module" src="https://pyscript.net/releases/2024.11.1/core.js"></script>
+
+    <!-- Google Identity Services -->
+    <script src="https://accounts.google.com/gsi/client" async defer></script>
+
+    <style>
+        /* ===== リセット / ベース ===== */
+        *,
+        *::before,
+        *::after {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0
+        }
+
+        :root {
+            --bg: #0d0f1a;
+            --bg2: #131629;
+            --card: #1a1e35;
+            --card2: #1f2440;
+            --accent: #6c63ff;
+            --accent2: #a78bfa;
+            --green: #10b981;
+            --red: #ef4444;
+            --yellow: #f59e0b;
+            --text: #e2e8f0;
+            --muted: #64748b;
+            --border: #2d3561;
+            --radius: 16px;
+            --shadow: 0 8px 32px rgba(0, 0, 0, .4);
+        }
+
+        body {
+            font-family: 'Hiragino Sans', 'Noto Sans JP', sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            min-height: 100vh;
+            overflow-x: hidden
+        }
+
+        button {
+            cursor: pointer;
+            border: none;
+            font-family: inherit
+        }
+
+        input,
+        select {
+            font-family: inherit
+        }
+
+        /* ===== ローディング ===== */
+        #py-loading {
+            position: fixed;
+            inset: 0;
+            background: var(--bg);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 9999;
+            gap: 16px
+        }
+
+        #py-loading .spinner {
+            width: 48px;
+            height: 48px;
+            border: 4px solid var(--border);
+            border-top-color: var(--accent);
+            border-radius: 50%;
+            animation: spin 1s linear infinite
+        }
+
+        @keyframes spin {
+            to {
+                transform: rotate(360deg)
+            }
+        }
+
+        #py-loading p {
+            color: var(--muted);
+            font-size: .9rem
+        }
+
+        /* ===== レイアウト ===== */
+        .app {
+            display: none;
+            flex-direction: column;
+            min-height: 100vh
+        }
+
+        .app.ready {
+            display: flex
+        }
+
+        header {
+            background: linear-gradient(135deg, #1a1e35, #1f2440);
+            border-bottom: 1px solid var(--border);
+            padding: 16px 24px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            backdrop-filter: blur(12px)
+        }
+
+        header h1 {
+            font-size: 1.2rem;
+            font-weight: 700;
+            background: linear-gradient(90deg, var(--accent), var(--accent2));
+            -webkit-background-clip: text;
+            background-clip: text;
+            -webkit-text-fill-color: transparent
+        }
+
+        .header-actions {
+            display: flex;
+            gap: 10px;
+            align-items: center
+        }
+
+        main {
+            flex: 1;
+            padding: 24px 16px;
+            max-width: 900px;
+            width: 100%;
+            margin: 0 auto
+        }
+
+        /* ===== ボタン ===== */
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 10px 18px;
+            border-radius: 10px;
+            font-size: .875rem;
+            font-weight: 600;
+            transition: all .2s
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, var(--accent), #8b5cf6);
+            color: #fff;
+            box-shadow: 0 4px 16px rgba(108, 99, 255, .3)
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(108, 99, 255, .45)
+        }
+
+        .btn-ghost {
+            background: transparent;
+            border: 1px solid var(--border);
+            color: var(--text)
+        }
+
+        .btn-ghost:hover {
+            background: var(--card2)
+        }
+
+        .btn-sm {
+            padding: 6px 12px;
+            font-size: .8rem
+        }
+
+        .btn-green {
+            background: linear-gradient(135deg, #059669, var(--green));
+            color: #fff
+        }
+
+        .btn-google {
+            background: #fff;
+            color: #374151;
+            border: 1px solid #d1d5db
+        }
+
+        .btn-google:hover {
+            background: #f9fafb
+        }
+
+        /* ===== 今日のノルマ ===== */
+        .today-card {
+            background: linear-gradient(135deg, #1a1e35, #2d1f5e);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            padding: 20px 24px;
+            margin-bottom: 24px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 16px;
+            flex-wrap: wrap;
+            animation: fadeUp .4s ease both
+        }
+
+        .today-card h2 {
+            font-size: .8rem;
+            color: var(--muted);
+            text-transform: uppercase;
+            letter-spacing: .08em;
+            margin-bottom: 4px
+        }
+
+        .today-quota {
+            font-size: 2rem;
+            font-weight: 700;
+            background: linear-gradient(90deg, var(--accent), var(--accent2));
+            -webkit-background-clip: text;
+            background-clip: text;
+            -webkit-text-fill-color: transparent
+        }
+
+        .today-date {
+            color: var(--muted);
+            font-size: .85rem;
+            margin-top: 4px
+        }
+
+        /* ===== タスクグリッド ===== */
+        .section-title {
+            font-size: .75rem;
+            color: var(--muted);
+            text-transform: uppercase;
+            letter-spacing: .1em;
+            margin-bottom: 12px
+        }
+
+        .task-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+            gap: 16px
+        }
+
+        /* ===== タスクカード ===== */
+        .task-card {
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            padding: 20px;
+            transition: transform .2s, box-shadow .2s;
+            animation: fadeUp .4s ease both
+        }
+
+        .task-card:hover {
+            transform: translateY(-3px);
+            box-shadow: var(--shadow)
+        }
+
+        .task-card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 12px
+        }
+
+        .subject-badge {
+            font-size: .75rem;
+            font-weight: 700;
+            padding: 4px 10px;
+            border-radius: 6px;
+            background: rgba(108, 99, 255, .2);
+            color: var(--accent2)
+        }
+
+        .task-deadline {
+            font-size: .75rem;
+            color: var(--muted)
+        }
+
+        .task-deadline.urgent {
+            color: var(--red)
+        }
+
+        .task-title {
+            font-size: 1rem;
+            font-weight: 600;
+            margin-bottom: 4px
+        }
+
+        .task-pages {
+            font-size: .8rem;
+            color: var(--muted);
+            margin-bottom: 12px
+        }
+
+        /* ===== 進捗バー ===== */
+        .progress-wrap {
+            margin-bottom: 14px
+        }
+
+        .progress-label {
+            display: flex;
+            justify-content: space-between;
+            font-size: .75rem;
+            color: var(--muted);
+            margin-bottom: 6px
+        }
+
+        .progress-bar {
+            height: 8px;
+            background: var(--border);
+            border-radius: 999px;
+            overflow: hidden
+        }
+
+        .progress-fill {
+            height: 100%;
+            border-radius: 999px;
+            background: linear-gradient(90deg, var(--accent), var(--accent2));
+            transition: width .6s cubic-bezier(.4, 0, .2, 1)
+        }
+
+        .progress-fill.done {
+            background: linear-gradient(90deg, #059669, var(--green))
+        }
+
+        /* ===== ノルマ ===== */
+        .quota-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            background: rgba(108, 99, 255, .08);
+            border-radius: 8px;
+            padding: 8px 12px;
+            margin-bottom: 12px;
+            font-size: .85rem
+        }
+
+        .quota-num {
+            font-weight: 700;
+            color: var(--accent2)
+        }
+
+        /* ===== カードアクション ===== */
+        .card-actions {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap
+        }
+
+        /* ===== 空状態 ===== */
+        .empty-state {
+            text-align: center;
+            padding: 64px 24px;
+            color: var(--muted);
+            animation: fadeUp .4s ease
+        }
+
+        .empty-state .emoji {
+            font-size: 3rem;
+            margin-bottom: 16px
+        }
+
+        /* ===== モーダル ===== */
+        .modal-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, .7);
+            backdrop-filter: blur(4px);
+            z-index: 200;
+            display: flex;
+            align-items: flex-end;
+            justify-content: center;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity .25s
+        }
+
+        .modal-overlay.open {
+            opacity: 1;
+            pointer-events: all
+        }
+
+        .modal {
+            background: var(--card2);
+            border-radius: 24px 24px 0 0;
+            padding: 28px 24px 40px;
+            width: 100%;
+            max-width: 520px;
+            transform: translateY(40px);
+            transition: transform .3s cubic-bezier(.4, 0, .2, 1)
+        }
+
+        .modal-overlay.open .modal {
+            transform: translateY(0)
+        }
+
+        @media(min-width:600px) {
+            .modal-overlay {
+                align-items: center
+            }
+
+            .modal {
+                border-radius: 24px;
+                padding: 32px
+            }
+        }
+
+        .modal-title {
+            font-size: 1.1rem;
+            font-weight: 700;
+            margin-bottom: 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center
+        }
+
+        .modal-close {
+            background: var(--card);
+            border: none;
+            color: var(--muted);
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            font-size: 1rem;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center
+        }
+
+        .modal-close:hover {
+            color: var(--text)
+        }
+
+        /* ===== フォーム ===== */
+        .form-group {
+            margin-bottom: 16px
+        }
+
+        label {
+            display: block;
+            font-size: .8rem;
+            color: var(--muted);
+            margin-bottom: 6px;
+            font-weight: 600
+        }
+
+        input[type=text],
+        input[type=number],
+        input[type=date],
+        select {
+            width: 100%;
+            background: var(--card);
+            border: 1px solid var(--border);
+            color: var(--text);
+            padding: 10px 14px;
+            border-radius: 10px;
+            font-size: .9rem;
+            transition: border-color .2s;
+            outline: none
+        }
+
+        input:focus,
+        select:focus {
+            border-color: var(--accent)
+        }
+
+        .form-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px
+        }
+
+        .form-hint {
+            font-size: .75rem;
+            color: var(--muted);
+            margin-top: 4px
+        }
+
+        /* ===== シミュレーション結果 ===== */
+        .sim-result {
+            background: var(--card);
+            border-radius: 12px;
+            padding: 16px;
+            margin-top: 16px;
+            border-left: 3px solid var(--accent);
+            display: none
+        }
+
+        .sim-result.show {
+            display: block
+        }
+
+        .sim-result h3 {
+            font-size: .85rem;
+            color: var(--accent2);
+            margin-bottom: 10px
+        }
+
+        .sim-item {
+            display: flex;
+            justify-content: space-between;
+            font-size: .85rem;
+            padding: 5px 0;
+            border-bottom: 1px solid var(--border)
+        }
+
+        .sim-item:last-child {
+            border-bottom: none
+        }
+
+        .sim-item .val {
+            font-weight: 700
+        }
+
+        .sim-item .val.early {
+            color: var(--green)
+        }
+
+        .sim-item .val.late {
+            color: var(--red)
+        }
+
+        .sim-item .val.ontime {
+            color: var(--yellow)
+        }
+
+        /* ===== カレンダーセクション ===== */
+        .cal-section {
+            margin-top: 16px;
+            padding-top: 16px;
+            border-top: 1px solid var(--border)
+        }
+
+        /* ===== アニメーション ===== */
+        @keyframes fadeUp {
+            from {
+                opacity: 0;
+                transform: translateY(16px)
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0)
+            }
+        }
+
+        /* ===== ユーティリティ ===== */
+        .text-muted {
+            color: var(--muted)
+        }
+
+        .mt-4 {
+            margin-top: 16px
+        }
+
+        .gap-2 {
+            gap: 8px
+        }
+
+        /* ===== トースト通知 ===== */
+        #toast-container {
+            position: fixed;
+            bottom: 24px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            z-index: 9999;
+            pointer-events: none;
+        }
+
+        .toast {
+            background: #1e2340;
+            border: 1px solid var(--border);
+            color: var(--text);
+            padding: 12px 20px;
+            border-radius: 10px;
+            font-size: .875rem;
+            box-shadow: 0 8px 24px rgba(0, 0, 0, .5);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            animation: toastIn .3s ease, toastOut .4s ease 2.6s forwards;
+            white-space: nowrap;
+        }
+
+        .toast.success {
+            border-left: 3px solid var(--green);
+        }
+
+        .toast.error {
+            border-left: 3px solid var(--red);
+        }
+
+        .toast.info {
+            border-left: 3px solid var(--accent);
+        }
+
+        @keyframes toastIn {
+            from {
+                opacity: 0;
+                transform: translateY(12px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        @keyframes toastOut {
+            from {
+                opacity: 1;
+            }
+
+            to {
+                opacity: 0;
+            }
+        }
+    </style>
+</head>
+
+<body>
+
+    <!-- トースト通知コンテナ -->
+    <div id="toast-container"></div>
+
+    <!-- ローディング -->
+    <div id="py-loading">
+        <div class="spinner"></div>
+        <p>Python エンジン起動中…</p>
+    </div>
+
+    <!-- アプリ本体 -->
+    <div class="app" id="app">
+        <header>
+            <h1>📚 宿題トラッカー</h1>
+            <div class="header-actions">
+                <button class="btn btn-ghost btn-sm" onclick="openUserModal()">👤 ユーザー設定</button>
+                <button class="btn btn-ghost btn-sm" id="btn-gcal-login" onclick="initGoogleAuth()">🗓
+                    Google連携</button>
+                <button class="btn btn-primary" id="btn-add" onclick="openAddModal()">＋ タスク追加</button>
+            </div>
+        </header>
+
+        <main>
+            <!-- 今日のノルマ -->
+            <div class="today-card">
+                <div>
+                    <h2>今日のノルマ（合計）</h2>
+                    <div class="today-quota" id="today-total">0 ページ</div>
+                    <div class="today-date" id="today-date"></div>
+                </div>
+                <div style="text-align:right">
+                    <div style="font-size:.8rem;color:var(--muted);margin-bottom:4px">登録タスク</div>
+                    <div style="font-size:1.8rem;font-weight:700" id="task-count">0</div>
+                </div>
+            </div>
+
+            <!-- タスク一覧 -->
+            <div class="section-title">教科一覧</div>
+            <div class="task-grid" id="task-grid"></div>
+        </main>
+    </div>
+
+    <!-- タスク登録モーダル -->
+    <div class="modal-overlay" id="add-modal">
+        <div class="modal">
+            <div class="modal-title">
+                📝 新しいタスクを登録
+                <button class="modal-close" onclick="closeModal('add-modal')">✕</button>
+            </div>
+            <div class="form-group">
+                <label>教科名</label>
+                <input type="text" id="f-subject" placeholder="例: 数学">
+            </div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label>開始ページ</label>
+                    <input type="number" id="f-start-page" placeholder="1" min="1">
+                </div>
+                <div class="form-group">
+                    <label>終了ページ</label>
+                    <input type="number" id="f-end-page" placeholder="50" min="1">
+                </div>
+            </div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label>開始日</label>
+                    <input type="date" id="f-start-date">
+                </div>
+                <div class="form-group">
+                    <label>目標完了日（期限）</label>
+                    <input type="date" id="f-deadline">
+                </div>
+            </div>
+            <div class="form-group">
+                <label>1日の学習時間（分）</label>
+                <input type="number" id="f-daily-min" placeholder="60" min="1" value="60">
+                <div class="form-hint">シミュレーションで使用します</div>
+            </div>
+            <div class="form-group">
+                <label>📝 テスト日（任意）</label>
+                <input type="date" id="f-test-date">
+                <div class="form-hint">設定するとカレンダーにテスト予定を登録します</div>
+            </div>
+            <button class="btn btn-primary" style="width:100%;justify-content:center;margin-top:4px"
+                id="btn-submit-task">登録する</button>
+        </div>
+    </div>
+
+    <!-- 実績入力モーダル -->
+    <div class="modal-overlay" id="progress-modal">
+        <div class="modal">
+            <div class="modal-title">
+                ✏️ 実績を入力
+                <button class="modal-close" onclick="closeModal('progress-modal')">✕</button>
+            </div>
+            <input type="hidden" id="p-task-id">
+            <div id="p-task-info"
+                style="margin-bottom:16px;padding:10px 14px;background:var(--card);border-radius:10px;font-size:.85rem;color:var(--muted)">
+            </div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label>今日進んだページ数</label>
+                    <input type="number" id="p-pages" placeholder="10" min="1">
+                </div>
+                <div class="form-group">
+                    <label>かかった時間（分）</label>
+                    <input type="number" id="p-minutes" placeholder="60" min="1">
+                </div>
+            </div>
+            <button class="btn btn-green" style="width:100%;justify-content:center"
+                id="btn-submit-progress">保存する</button>
+
+            <!-- シミュレーション結果 -->
+            <div class="sim-result" id="sim-result">
+                <h3>📊 完了シミュレーション</h3>
+                <div class="sim-item"><span>残りページ数</span><span class="val" id="sim-remaining"></span></div>
+                <div class="sim-item"><span>1ページあたりの時間</span><span class="val" id="sim-per-page"></span></div>
+                <div class="sim-item"><span>残り必要時間</span><span class="val" id="sim-time-left"></span></div>
+                <div class="sim-item"><span>推定完了日</span><span class="val" id="sim-finish-date"></span></div>
+                <div class="sim-item"><span>期限との差</span><span class="val" id="sim-diff"></span></div>
+            </div>
+
+            <!-- Googleカレンダー自動同期ステータス -->
+            <div class="cal-section" id="cal-section" style="display:none">
+                <div id="cal-status" style="font-size:.8rem;margin-top:6px;color:var(--muted)"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ユーザー設定モーダル -->
+    <div class="modal-overlay" id="user-modal">
+        <div class="modal">
+            <div class="modal-title">
+                👤 ユーザー設定
+                <button class="modal-close" onclick="closeModal('user-modal')">✕</button>
+            </div>
+            <div class="form-group">
+                <label>ユーザー名</label>
+                <input type="text" id="u-name" placeholder="例: 太郎">
+                <div class="form-hint">Googleスプレッドシートのシート名になります</div>
+            </div>
+            <div class="form-group">
+                <label>📊 スプレッドシートID（任意）</label>
+                <input type="text" id="u-sheet-id" placeholder="スプレッドシートのURLにある長いID">
+                <div class="form-hint">空白の場合は新しいスプレッドシートを自動作成します</div>
+            </div>
+            <button class="btn btn-primary" style="width:100%;justify-content:center;margin-top:8px"
+                onclick="saveUserSettings()">保存する</button>
+            <div id="u-sheet-link" style="margin-top:10px;font-size:.8rem;text-align:center"></div>
+        </div>
+    </div>
+
+    <!-- ===== JavaScript ===== -->
+    <script>
+        // ---- Google API 設定 ----
+        const GOOGLE_CLIENT_ID = '341740109947-llct7teg3vqbk3fcbfplqsriotp9igis.apps.googleusercontent.com';
+        const SCOPES = [
+            'https://www.googleapis.com/auth/calendar.events',
+            'https://www.googleapis.com/auth/spreadsheets'
+        ].join(' ');
+        let googleToken = null;
+
+        // ---- ユーザー設定 ----
+        function getUserSettings() {
+            return JSON.parse(localStorage.getItem('hw_user') || '{"name":"生徒","sheetId":""}');
+        }
+        function openUserModal() {
+            const s = getUserSettings();
+            document.getElementById('u-name').value = s.name || '';
+            document.getElementById('u-sheet-id').value = s.sheetId || '';
+            const link = document.getElementById('u-sheet-link');
+            link.innerHTML = s.sheetId
+                ? `<a href="https://docs.google.com/spreadsheets/d/${s.sheetId}" target="_blank" style="color:var(--accent)">📊 スプレッドシートを開く</a>`
+                : '';
+            openModal('user-modal');
+        }
+        function saveUserSettings() {
+            const name = document.getElementById('u-name').value.trim() || '生徒';
+            const sheetId = document.getElementById('u-sheet-id').value.trim();
+            localStorage.setItem('hw_user', JSON.stringify({ name, sheetId }));
+            showToast(`👤 ユーザー「${name}」の設定を保存しました`, 'success');
+            closeModal('user-modal');
+        }
+
+        /** トースト通知を画面下部にスライド表示する */
+        function showToast(msg, type = 'info', duration = 3000) {
+            const el = document.createElement('div');
+            el.className = `toast ${type}`;
+            el.textContent = msg;
+            document.getElementById('toast-container').appendChild(el);
+            setTimeout(() => el.remove(), duration + 400);
+        }
+
+        // ---- トークン永続化ヘルパー ----
+        /** アクセストークンを有効期限付きでlocalStorageに保存する */
+        function storeToken(token, expiresIn = 3600) {
+            // 実際の期限より5分早く期限切れとして扱う（余裕を持つ）
+            const expiry = Date.now() + (expiresIn - 300) * 1000;
+            localStorage.setItem('hw_gcal_token', JSON.stringify({ token, expiry }));
+        }
+
+        /** localStorage からトークンを復元する。期限切れなら null を返す */
+        function restoreToken() {
+            const raw = localStorage.getItem('hw_gcal_token');
+            if (!raw) return null;
+            try {
+                const { token, expiry } = JSON.parse(raw);
+                if (Date.now() < expiry) return token;
+                localStorage.removeItem('hw_gcal_token'); // 期限切れは削除
+            } catch (e) { /* 壊れたデータは無視 */ }
+            return null;
+        }
+
+        /** 連携済みUI状態にする共通処理 */
+        function setConnectedUI() {
+            const btn = document.getElementById('btn-gcal-login');
+            btn.textContent = '✅ カレンダー連携済み';
+            btn.disabled = true;
+            const calSec = document.getElementById('cal-section');
+            if (calSec) calSec.style.display = 'block';
+            updateSyncBadges();
+        }
+
+        /** Googleカレンダー認証（手動ボタン押下時） */
+        function initGoogleAuth() {
+            if (!window.google) {
+                alert('Google API の読み込みに失敗しました。ネット接続を確認してください。');
+                return;
+            }
+            const client = google.accounts.oauth2.initTokenClient({
+                client_id: GOOGLE_CLIENT_ID,
+                scope: SCOPES,
+                callback: (resp) => {
+                    if (resp.error) { console.error('Google認証エラー:', resp); return; }
+                    googleToken = resp.access_token;
+                    // トークンを有効期限付きでlocalStorageに保存
+                    storeToken(resp.access_token, resp.expires_in || 3600);
+                    setConnectedUI();
+                }
+            });
+            client.requestAccessToken();
+        }
+
+        /** ページロード時にlocalStorageのトークンを復元する */
+        function tryRestoreToken() {
+            const token = restoreToken();
+            if (!token) return; // トークンなし or 期限切れ
+            googleToken = token;
+            setConnectedUI();
+        }
+
+        /** 全タスクカードの同期バッジ表示を更新する */
+        function updateSyncBadges() {
+            const calIds = getCalEventIds();
+            document.querySelectorAll('.task-card[data-task-id]').forEach(card => {
+                const tid = card.getAttribute('data-task-id');
+                const badge = card.querySelector('.sync-badge');
+                if (!badge) return;
+                const ids = calIds[tid] || [];
+                if (ids.length > 0) {
+                    badge.textContent = '🗓 カレンダー同期済み';
+                    badge.style.color = 'var(--green)';
+                } else {
+                    badge.textContent = googleToken ? '⚠️ 未同期' : '';
+                    badge.style.color = 'var(--yellow)';
+                }
+            });
+        }
+
+        /**
+         * タスク削除時にGoogleカレンダーのイベントも削除する。
+         * ① 保存済みイベントID を削除
+         * ② Calendar API で教科名を検索して見つかったイベントも削除（二重保険）
+         */
+        async function deleteCalendarEvents(taskId) {
+            if (!googleToken) return;
+            const headers = { 'Authorization': `Bearer ${googleToken}` };
+            const tasks = JSON.parse(localStorage.getItem('hw_tasks') || '[]');
+            const task = tasks.find(t => t.task_id === taskId);
+
+            let allIds = [];
+
+            // ① 保存済みIDを収集
+            const calIds = getCalEventIds();
+            allIds = [...(calIds[taskId] || [])];
+
+            // ② Calendar API で教科名を含むイベントを期間検索して収集
+            if (task) {
+                // ローカル時刻ベースで検索範囲を構築
+                const fmt = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+                const startDt = new Date(task.start_date + 'T00:00:00');
+                const endDt = new Date(task.deadline + 'T23:59:59');
+                const tMin = startDt.toISOString();
+                // Calendar API は終日イベントで1日ズレるため、期限の翌日0時をtMaxにする
+                const endPlus1 = new Date(task.deadline + 'T00:00:00');
+                endPlus1.setDate(endPlus1.getDate() + 1);
+                const tMax = endPlus1.toISOString();
+                const q = encodeURIComponent(task.subject);
+                const url = `https://www.googleapis.com/calendar/v3/calendars/primary/events?q=${q}&timeMin=${tMin}&timeMax=${tMax}&singleEvents=true&maxResults=50`;
+                try {
+                    const res = await fetch(url, { headers });
+                    if (res.ok) {
+                        const data = await res.json();
+                        for (const ev of (data.items || [])) {
+                            if (!allIds.includes(ev.id)) allIds.push(ev.id);
+                        }
+                    }
+                } catch (e) { /* 検索失敗は無視 */ }
+            }
+
+            if (allIds.length === 0) return; // 削除対象なし
+
+            // まとめて削除
+            let deleted = 0;
+            for (const eid of allIds) {
+                const r = await fetch(
+                    `https://www.googleapis.com/calendar/v3/calendars/primary/events/${eid}`,
+                    { method: 'DELETE', headers }
+                ).catch(() => null);
+                if (r && (r.status === 204 || r.status === 200)) deleted++;
+            }
+
+            // localStorageのIDをクリア
+            delete calIds[taskId];
+            saveCalEventIds(calIds);
+
+            // トーストで結果を通知し、バッジを自動更新
+            if (deleted > 0) {
+                showToast(`🗑 カレンダーから ${deleted} 件のイベントを削除しました`, 'info');
+            }
+            updateSyncBadges();
+        }
+
+        // ページロード時にトークン復元を試みる
+        window.addEventListener('load', tryRestoreToken);
+
+
+        // 現在のタスクIDを保持
+        let currentTaskId = null;
+
+        // タスクごとに登録済みカレンダーイベントIDを保持
+        // 構造: { task_id: [eventId, ...] }
+        function getCalEventIds() {
+            return JSON.parse(localStorage.getItem('hw_cal_ids') || '{}');
+        }
+        function saveCalEventIds(obj) {
+            localStorage.setItem('hw_cal_ids', JSON.stringify(obj));
+        }
+
+        /**
+         * 指定タスクの既存カレンダーイベントを削除し、
+         * 今日から期限まで最新ノルマで再登録する。
+         * タスク登録時・実績保存時に自動で呼ばれる。
+         */
+        async function autoSyncCalendar(taskId, statusElId, startFromTomorrow = false) {
+            if (!googleToken) return; // 未連携なら何もしない
+            const tasks = JSON.parse(localStorage.getItem('hw_tasks') || '[]');
+            const task = tasks.find(t => t.task_id === taskId);
+            if (!task) return;
+
+            const statusEl = statusElId ? document.getElementById(statusElId) : null;
+            if (statusEl) {
+                statusEl.textContent = '🔄 カレンダーを更新中…';
+                statusEl.style.color = 'var(--accent2)';
+            }
+
+            const headers = {
+                'Authorization': `Bearer ${googleToken}`,
+                'Content-Type': 'application/json'
+            };
+
+            // ① 既存イベントを削除
+            const calIds = getCalEventIds();
+            const existingIds = calIds[taskId] || [];
+            for (const eid of existingIds) {
+                await fetch(
+                    `https://www.googleapis.com/calendar/v3/calendars/primary/events/${eid}`,
+                    { method: 'DELETE', headers }
+                ).catch(() => { }); // 削除失敗は無視
+            }
+
+            // ② 最新ノルマで期限まで再登録
+            const today = new Date(); today.setHours(0, 0, 0, 0);
+            const startDate = new Date(today);
+            if (startFromTomorrow) {
+                startDate.setDate(startDate.getDate() + 1);
+            }
+            const deadline = new Date(task.deadline); deadline.setHours(0, 0, 0, 0);
+            const remaining = task.total_pages - task.completed_pages;
+
+            if (remaining <= 0) {
+                // 完了済みは既存イベント削除のみ
+                calIds[taskId] = [];
+                saveCalEventIds(calIds);
+                if (statusEl) { statusEl.textContent = '✅ 完了済み（カレンダーのイベントを削除）'; statusEl.style.color = 'var(--green)'; }
+                return;
+            }
+
+            // 期限当日も含める（+1）
+            const days = Math.max(1, Math.round((deadline - startDate) / 86400000) + 1);
+            const quotaPerDay = Math.ceil(remaining / days);
+            const newIds = [];
+            let current = task.completed_pages;
+
+            for (let d = 0; d < days; d++) {
+                const day = new Date(startDate); day.setDate(startDate.getDate() + d);
+                // toISOString()はUTC変換でズレるためローカル時刻でフォーマット
+                const dateStr = `${day.getFullYear()}-${String(day.getMonth() + 1).padStart(2, '0')}-${String(day.getDate()).padStart(2, '0')}`;
+                const from = current + 1;
+                const to = Math.min(current + quotaPerDay, task.total_pages);
+                current = to;
+                const title = `${task.subject} ${from}〜${to}ページ`;
+
+                const res = await fetch(
+                    'https://www.googleapis.com/calendar/v3/calendars/primary/events',
+                    {
+                        method: 'POST',
+                        headers,
+                        body: JSON.stringify({
+                            summary: title,
+                            start: { date: dateStr },
+                            end: { date: dateStr },
+                            colorId: '9'
+                        })
+                    }
+                );
+                if (res.ok) {
+                    const ev = await res.json();
+                    newIds.push(ev.id);
+                }
+                if (to >= task.total_pages) break;
+            }
+
+            // ③ 新しいIDを保存
+            calIds[taskId] = newIds;
+            saveCalEventIds(calIds);
+
+            // トーストで結果を通知
+            if (newIds.length > 0) {
+                showToast(`🗓 ${task.subject}：カレンダーに${newIds.length}件登録しました`, 'success');
+            } else {
+                showToast(`⚠️ ${task.subject}：カレンダー登録に失敗しました`, 'error');
+            }
+
+            // ステータス表示も更新
+            if (statusEl) {
+                statusEl.textContent = newIds.length > 0
+                    ? `✅ カレンダーに${newIds.length}件登録（更新）しました！`
+                    : '⚠️ 登録に失敗しました';
+                statusEl.style.color = newIds.length > 0 ? 'var(--green)' : 'var(--red)';
+            }
+
+            // ダッシュボードのバッジを自動更新
+            updateSyncBadges();
+
+            // ④ テスト日が設定されている場合はカレンダーに登録
+            if (task.test_date) {
+                const testDateStr = task.test_date; // ローカル日付文字列そのまま使用
+                const testTitle = `📝 ${task.subject} テスト`;
+                await fetch('https://www.googleapis.com/calendar/v3/calendars/primary/events', {
+                    method: 'POST',
+                    headers,
+                    body: JSON.stringify({
+                        summary: testTitle,
+                        start: { date: testDateStr },
+                        end: { date: testDateStr },
+                        colorId: '11' // 赤色
+                    })
+                }).catch(() => { });
+                showToast(`📝 ${task.subject} のテスト日をカレンダーに登録しました`, 'info');
+            }
+        }
+
+        // ===== Google Sheets 連携 =====
+
+        /** スプレッドシートにない場合はシートを追加する */
+        async function ensureSheet(spreadsheetId, sheetName, headers) {
+            const h = { 'Authorization': `Bearer ${googleToken}`, 'Content-Type': 'application/json' };
+            // シート一覧取得
+            const metaRes = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}?fields=sheets.properties`, { headers: h });
+            if (!metaRes.ok) return false;
+            const meta = await metaRes.json();
+            const exists = (meta.sheets || []).some(s => s.properties.title === sheetName);
+            if (!exists) {
+                // シート追加
+                await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}:batchUpdate`, {
+                    method: 'POST', headers: h,
+                    body: JSON.stringify({ requests: [{ addSheet: { properties: { title: sheetName } } }] })
+                });
+                // ヘッダー行を書き込む
+                const range = encodeURIComponent(`${sheetName}!A1`);
+                await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${range}?valueInputOption=USER_ENTERED`, {
+                    method: 'PUT', headers: h,
+                    body: JSON.stringify({ values: [headers] })
+                });
+            }
+            return true;
+        }
+
+        /**
+         * 実績入力時にスプレッドシートへデータを追記し、棒グラフを更新する。
+         * @param {string} taskId - タスクID
+         * @param {number} pagesAdded - 今日追加したページ数
+         * @param {number} minutesSpent - 今日かかった時間（分）
+         */
+        async function updateSheets(taskId, pagesAdded, minutesSpent) {
+            if (!googleToken) return;
+            const { name: userName, sheetId: savedSheetId } = getUserSettings();
+            const h = { 'Authorization': `Bearer ${googleToken}`, 'Content-Type': 'application/json' };
+            const tasks = JSON.parse(localStorage.getItem('hw_tasks') || '[]');
+            const task = tasks.find(t => t.task_id === taskId);
+            if (!task) return;
+
+            // スプレッドシートID取得（なければ新規作成）
+            let spreadsheetId = savedSheetId;
+            if (!spreadsheetId) {
+                const createRes = await fetch('https://sheets.googleapis.com/v4/spreadsheets', {
+                    method: 'POST', headers: h,
+                    body: JSON.stringify({ properties: { title: '宿題進捗トラッカー' } })
+                });
+                if (!createRes.ok) { showToast('⚠️ スプレッドシート作成に失敗しました', 'error'); return; }
+                const created = await createRes.json();
+                spreadsheetId = created.spreadsheetId;
+                // IDをlocalStorageに保存
+                const settings = getUserSettings();
+                settings.sheetId = spreadsheetId;
+                localStorage.setItem('hw_user', JSON.stringify(settings));
+                showToast(`📊 新しいスプレッドシートを作成しました`, 'success');
+            }
+
+            const HEADERS = ['日付', '教科', '予定時間(分)', '実績時間(分)', '予定ページ数/日', '実績ページ数'];
+
+            // ユーザーごとのシートを確保
+            await ensureSheet(spreadsheetId, userName, HEADERS);
+
+            // 今日の予定ページ数（明日の予定ノルマとして計算）
+            const today = new Date();
+            const todayStr = `${today.getFullYear()}/${String(today.getMonth() + 1).padStart(2, '0')}/${String(today.getDate()).padStart(2, '0')}`;
+            const deadline = new Date(task.deadline + 'T00:00:00');
+            const remaining = task.total_pages - task.completed_pages;
+            // 明日から期限までの日数（今日を除外するため+1しない）
+            const daysLeft = Math.max(1, Math.round((deadline - today) / 86400000));
+            const dailyQuota = Math.ceil(remaining / daysLeft);
+            const plannedMin = task.daily_study_minutes || 60;
+
+            // データ行を追記
+            const row = [todayStr, task.subject, plannedMin, minutesSpent, dailyQuota, pagesAdded];
+            const dataRange = encodeURIComponent(`${userName}!A:F`);
+            await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${dataRange}:append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS`, {
+                method: 'POST', headers: h,
+                body: JSON.stringify({ values: [row] })
+            });
+
+            // ===== 集計シートとグラフの作成/更新 =====
+            const sumSheetName = `${userName}_集計`;
+            const sumHeaders = ['集計日指定:', todayStr, '', '推移集計', '日付', '合計実績時間'];
+            await ensureSheet(spreadsheetId, sumSheetName, sumHeaders);
+
+            // 集計用の数式を書き込む
+            // A列: 教科一覧 (UNIQUE)
+            // B列: 指定日の予定時間合算 (SUMIFS)
+            // C列: 指定日の実績時間合算 (SUMIFS)
+            // E,F列: 日別の時間推移 (UNIQUEとSUMIF)
+            const sumFormulas = [
+                ['教科', '予定時間合算', '実績時間合算', '', '', ''],
+                [
+                    `=IFERROR(UNIQUE('${userName}'!B2:B), "")`,
+                    `=IF(A3="","",SUMIFS('${userName}'!C:C, '${userName}'!B:B, A3, '${userName}'!A:A, $B$1))`,
+                    `=IF(A3="","",SUMIFS('${userName}'!D:D, '${userName}'!B:B, A3, '${userName}'!A:A, $B$1))`,
+                    '',
+                    `=IFERROR(ARRAYFORMULA(TEXT(UNIQUE(FILTER('${userName}'!A2:A, '${userName}'!A2:A<>"")), "yyyy/mm/dd")), "")`,
+                    `=IF(E3="","",SUMIF('${userName}'!A:A, E3, '${userName}'!D:D))`
+                ]
+            ];
+            const sumFormulaRange = encodeURIComponent(`${sumSheetName}!A2:F3`);
+            // B1セルの日付（ユーザーが変更可能）を今日に更新するかは任意だが、ここではアクセス時に今日にする
+            await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${encodeURIComponent(sumSheetName + '!B1')}?valueInputOption=USER_ENTERED`, {
+                method: 'PUT', headers: h,
+                body: JSON.stringify({ values: [[todayStr]] })
+            });
+            await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${sumFormulaRange}?valueInputOption=USER_ENTERED`, {
+                method: 'PUT', headers: h,
+                body: JSON.stringify({ values: sumFormulas })
+            });
+
+            // 既存グラフを取得してシートIDを確認
+            const metaRes = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}?fields=sheets`, { headers: h });
+            const meta = await metaRes.json();
+            const sheet = (meta.sheets || []).find(s => s.properties.title === sumSheetName);
+            if (!sheet) { showToast('✅ スプレッドシートに記録しました', 'success'); return; }
+            const sheetIdNum = sheet.properties.sheetId;
+
+            // 既存のグラフを削除してから再作成
+            const existingCharts = sheet.charts || [];
+            const deleteRequests = existingCharts.map(c => ({ deleteEmbeddedObject: { objectId: c.chartId } }));
+
+            // グラフ1: 教科別 予定 vs 実績（指定日のみ、合算済み）
+            const barChartRequest = {
+                addChart: {
+                    chart: {
+                        spec: {
+                            title: `【指定日】教科別 予定 vs 実績（分）`,
+                            basicChart: {
+                                chartType: 'BAR',
+                                legendPosition: 'BOTTOM_LEGEND',
+                                axis: [
+                                    { position: 'BOTTOM_AXIS', title: '時間（分）' },
+                                    { position: 'LEFT_AXIS', title: '教科' }
+                                ],
+                                domains: [{ domain: { sourceRange: { sources: [{ sheetId: sheetIdNum, startRowIndex: 1, endRowIndex: 50, startColumnIndex: 0, endColumnIndex: 1 }] } } }],
+                                series: [
+                                    { series: { sourceRange: { sources: [{ sheetId: sheetIdNum, startRowIndex: 1, endRowIndex: 50, startColumnIndex: 1, endColumnIndex: 2 }] } }, targetAxis: 'BOTTOM_AXIS' },
+                                    { series: { sourceRange: { sources: [{ sheetId: sheetIdNum, startRowIndex: 1, endRowIndex: 50, startColumnIndex: 2, endColumnIndex: 3 }] } }, targetAxis: 'BOTTOM_AXIS' }
+                                ],
+                                headerCount: 1
+                            }
+                        },
+                        position: { overlayPosition: { anchorCell: { sheetId: sheetIdNum, rowIndex: 4, columnIndex: 0 } } }
+                    }
+                }
+            };
+
+            // グラフ2: 日別 勉強時間推移（折れ線グラフ）
+            const lineChartRequest = {
+                addChart: {
+                    chart: {
+                        spec: {
+                            title: `日別の総勉強時間 推移`,
+                            basicChart: {
+                                chartType: 'LINE',
+                                legendPosition: 'BOTTOM_LEGEND',
+                                axis: [
+                                    { position: 'BOTTOM_AXIS', title: '日付' },
+                                    { position: 'LEFT_AXIS', title: '合計時間（分）' }
+                                ],
+                                domains: [{ domain: { sourceRange: { sources: [{ sheetId: sheetIdNum, startRowIndex: 1, endRowIndex: 500, startColumnIndex: 4, endColumnIndex: 5 }] } } }],
+                                series: [
+                                    { series: { sourceRange: { sources: [{ sheetId: sheetIdNum, startRowIndex: 1, endRowIndex: 500, startColumnIndex: 5, endColumnIndex: 6 }] } }, targetAxis: 'LEFT_AXIS' }
+                                ],
+                                headerCount: 1
+                            }
+                        },
+                        position: { overlayPosition: { anchorCell: { sheetId: sheetIdNum, rowIndex: 4, columnIndex: 6 } } }
+                    }
+                }
+            };
+
+            await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}:batchUpdate`, {
+                method: 'POST', headers: h,
+                body: JSON.stringify({ requests: [...deleteRequests, barChartRequest, lineChartRequest] })
+            });
+
+            showToast(`📊 スプレッドシートに記録＆グラフを更新しました`, 'success');
+        }
+
+        // モーダル制御
+        function openModal(id) { document.getElementById(id).classList.add('open'); }
+        function closeModal(id) { document.getElementById(id).classList.remove('open'); }
+        function openAddModal() {
+            const today = new Date().toISOString().split('T')[0];
+            document.getElementById('f-start-date').value = today;
+            openModal('add-modal');
+        }
+        function openProgressModal(taskId) {
+            currentTaskId = taskId;
+            const tasks = JSON.parse(localStorage.getItem('hw_tasks') || '[]');
+            const task = tasks.find(t => t.task_id === taskId);
+            if (!task) return;
+            const info = document.getElementById('p-task-info');
+            info.innerHTML = `<strong>${task.subject}</strong> &nbsp;｜&nbsp; 進捗: ${task.completed_pages} / ${task.total_pages}ページ &nbsp;｜&nbsp; 期限: ${task.deadline}`;
+            document.getElementById('p-task-id').value = taskId;
+            document.getElementById('p-pages').value = '';
+            document.getElementById('p-minutes').value = '';
+            document.getElementById('sim-result').classList.remove('show');
+            const calSec = document.getElementById('cal-section');
+            if (googleToken) { calSec.style.display = 'block'; }
+            openModal('progress-modal');
+        }
+
+        // オーバーレイクリックで閉じる
+        document.querySelectorAll('.modal-overlay').forEach(el => {
+            el.addEventListener('click', e => { if (e.target === el) el.classList.remove('open'); });
+        });
+    </script>
+
+    <!-- ===== PyScript ===== -->
+    <script type="py">
+import json
+from datetime import date, timedelta
+from pyscript import document, display, when
+import js  # JavaScript interop
+
+# ---- ユーティリティ ----
+def get_tasks():
+    raw = js.localStorage.getItem('hw_tasks')
+    return json.loads(raw) if raw else []
+
+def save_tasks(tasks):
+    js.localStorage.setItem('hw_tasks', json.dumps(tasks, ensure_ascii=False))
+
+def today_str():
+    return date.today().isoformat()
+
+def parse_date(s):
+    return date.fromisoformat(s)
+
+def days_between(a: str, b: str) -> int:
+    # 期限当日も含める（+1）
+    return (parse_date(b) - parse_date(a)).days + 1
+
+# ---- 計算ロジック ----
+def calculate_daily_quota(total: int, completed: int, deadline: str) -> float:
+    """残りページ数 ÷ 残り日数"""
+    remaining = total - completed
+    days_left = max(1, days_between(today_str(), deadline))
+    return remaining / days_left
+
+def calculate_simulation(task: dict, daily_study_minutes: float) -> dict:
+    """実績ペースで完了までの推定日数・日付を計算"""
+    remaining = task['total_pages'] - task['completed_pages']
+    total_spent = task.get('actual_time_spent_minutes', 0)
+    total_done  = task.get('completed_pages', 0)
+
+    result = {}
+
+    if total_done > 0 and total_spent > 0:
+        per_page = total_spent / total_done          # 分/ページ
+        time_needed = remaining * per_page           # 残り必要時間（分）
+        est_days = max(1, time_needed / max(1, daily_study_minutes))
+    else:
+        # 実績なし：ノルマベースで計算
+        per_page = 0.0
+        quota = calculate_daily_quota(task['total_pages'], task['completed_pages'], task['deadline'])
+        est_days = remaining / max(1, quota)
+        time_needed = 0
+
+    finish_date = date.today() + timedelta(days=int(est_days) + (1 if est_days % 1 > 0.3 else 0))
+    deadline_dt = parse_date(task['deadline'])
+    diff = (finish_date - deadline_dt).days
+
+    result['remaining'] = remaining
+    result['per_page'] = round(per_page, 1)
+    result['time_needed_minutes'] = round(time_needed)
+    result['est_days'] = round(est_days, 1)
+    result['finish_date'] = finish_date.isoformat()
+    result['diff_days'] = diff  # 正=遅れ, 負=早まり, 0=ちょうど
+    return result
+
+# ---- ダッシュボード描画 ----
+def render_dashboard():
+    tasks = get_tasks()
+    grid = document.getElementById('task-grid')
+    today_total_el = document.getElementById('today-total')
+    count_el = document.getElementById('task-count')
+    date_el = document.getElementById('today-date')
+
+    # 今日の日付
+    d = date.today()
+    date_el.textContent = f'{d.year}年{d.month}月{d.day}日（{"月火水木金土日"[d.weekday()]}）'
+
+    # 今日の合計ノルマ
+    total_quota = 0.0
+    for t in tasks:
+        q = calculate_daily_quota(t['total_pages'], t['completed_pages'], t['deadline'])
+        if t['completed_pages'] < t['total_pages']:
+            total_quota += q
+
+    today_total_el.textContent = f'{int(total_quota)} ページ'
+    count_el.textContent = str(len(tasks))
+
+    # カード描画
+    if not tasks:
+        grid.innerHTML = '''
+        <div class="empty-state" style="grid-column:1/-1">
+          <div class="emoji">📖</div>
+          <p>まだタスクがありません</p>
+          <p style="font-size:.8rem;margin-top:8px">右上の「＋ タスク追加」から登録しましょう！</p>
+        </div>'''
+        return
+
+    cards_html = ''
+    for t in tasks:
+        pct = int(t['completed_pages'] / max(1, t['total_pages']) * 100)
+        quota = calculate_daily_quota(t['total_pages'], t['completed_pages'], t['deadline'])
+        days_left = days_between(today_str(), t['deadline'])
+        urgent_cls = 'urgent' if days_left <= 3 else ''
+        fill_cls = 'done' if pct >= 100 else ''
+        status_icon = '✅' if pct >= 100 else ('⚠️' if days_left <= 3 else '📚')
+        tid = t['task_id']
+
+        cards_html += f'''
+        <div class="task-card" data-task-id="{tid}">
+          <div class="task-card-header">
+            <span class="subject-badge">{status_icon} {t["subject"]}</span>
+            <span class="task-deadline {urgent_cls}">期限: {t["deadline"]}<br>残り{max(0,days_left)}日</span>
+          </div>
+          <div class="task-title">{t["subject"]}の宿題</div>
+          <div class="task-pages">{t["completed_pages"]} / {t["total_pages"]} ページ完了</div>
+          <div class="progress-wrap">
+            <div class="progress-label"><span>進捗</span><span>{pct}%</span></div>
+            <div class="progress-bar"><div class="progress-fill {fill_cls}" style="width:{pct}%"></div></div>
+          </div>
+          <div class="quota-row">
+            <span class="text-muted">今日のノルマ</span>
+            <span class="quota-num">{int(quota)+1} ページ</span>
+          </div>
+          <div class="card-actions">
+            <button class="btn btn-green btn-sm" onclick="openProgressModal('{tid}')">✏️ 実績入力</button>
+            <button class="btn btn-ghost btn-sm" onclick="deleteTask('{tid}')">🗑 削除</button>
+          </div>
+          <div style="margin-top:8px;font-size:.75rem;min-height:1.2em">
+            <span class="sync-badge"></span>'''
+
+        # テスト日バッジ
+        test_date = t.get('test_date', '')
+        if test_date:
+            test_days_left = days_between(today_str(), test_date) - 1
+            test_cls = 'color:var(--red)' if test_days_left <= 3 else 'color:var(--accent2)'
+            if test_days_left >= 0:
+                cards_html += f' <span style="{test_cls}">📝 テストまで{test_days_left}日</span>'
+            else:
+                cards_html += ' <span style="color:var(--muted)">📝 テスト終了</span>'
+
+        cards_html += '''
+          </div>
+        </div>'''
+
+    grid.innerHTML = cards_html
+    # カード描画後に同期バッジを更新（JS関数を呼び出す）
+    js.updateSyncBadges()
+
+# ---- タスク追加 ----
+@when('click', '#btn-submit-task')
+def on_add_task(event):
+    subject   = document.getElementById('f-subject').value.strip()
+    start_pg  = document.getElementById('f-start-page').value
+    end_pg    = document.getElementById('f-end-page').value
+    start_dt  = document.getElementById('f-start-date').value
+    deadline  = document.getElementById('f-deadline').value
+    daily_min = document.getElementById('f-daily-min').value
+
+    if not subject or not start_pg or not end_pg or not deadline:
+        js.alert('教科名・開始ページ・終了ページ・期限は必須です')
+        return
+
+    start_val = int(start_pg)
+    end_val = int(end_pg)
+    if end_val < start_val:
+        js.alert('終了ページは開始ページ以上の値にしてください')
+        return
+
+    tasks = get_tasks()
+    new_id = f'T{len(tasks)+1:03d}'
+    test_date = document.getElementById('f-test-date').value
+    task = {
+        'task_id': new_id,
+        'subject': subject,
+        'total_pages': end_val - start_val + 1,
+        'completed_pages': 0,
+        'start_date': start_dt or today_str(),
+        'deadline': deadline,
+        'daily_study_minutes': int(daily_min) if daily_min else 60,
+        'actual_time_spent_minutes': 0,
+        'start_page': start_val,
+        'test_date': test_date or '',
+    }
+    tasks.append(task)
+    save_tasks(tasks)
+    js.closeModal('add-modal')
+    render_dashboard()
+    # カレンダー連携済みなら自動同期
+    js.autoSyncCalendar(new_id, None)
+
+# ---- 実績入力 ----
+@when('click', '#btn-submit-progress')
+def on_add_progress(event):
+    task_id  = document.getElementById('p-task-id').value
+    pages    = document.getElementById('p-pages').value
+    minutes  = document.getElementById('p-minutes').value
+
+    if not pages or not minutes:
+        js.alert('ページ数と時間の両方を入力してください')
+        return
+
+    tasks = get_tasks()
+    task  = next((t for t in tasks if t['task_id'] == task_id), None)
+    if not task:
+        return
+
+    pages_int   = int(pages)
+    minutes_int = int(minutes)
+
+    task['completed_pages'] = min(task['total_pages'], task['completed_pages'] + pages_int)
+    task['actual_time_spent_minutes'] = task.get('actual_time_spent_minutes', 0) + minutes_int
+    save_tasks(tasks)
+
+    # シミュレーション計算
+    sim = calculate_simulation(task, task.get('daily_study_minutes', 60))
+
+    document.getElementById('sim-remaining').textContent  = f'{sim["remaining"]} ページ'
+    document.getElementById('sim-per-page').textContent   = f'{sim["per_page"]} 分/ページ' if sim["per_page"] > 0 else 'データ不足'
+    document.getElementById('sim-time-left').textContent  = f'約 {sim["time_needed_minutes"]} 分' if sim["time_needed_minutes"] > 0 else '算出中'
+
+    diff = sim['diff_days']
+    finish_el = document.getElementById('sim-finish-date')
+    diff_el   = document.getElementById('sim-diff')
+    fd_parts  = sim['finish_date'].split('-')
+    finish_el.textContent = f'{fd_parts[0]}年{int(fd_parts[1])}月{int(fd_parts[2])}日'
+
+    if diff < 0:
+        diff_el.textContent = f'期限より {abs(diff)} 日早く終わる見込み 🎉'
+        diff_el.className = 'val early'
+    elif diff == 0:
+        diff_el.textContent = '期限ちょうどに終わる見込み 👍'
+        diff_el.className = 'val ontime'
+    else:
+        diff_el.textContent = f'期限より {diff} 日遅れる見込み ⚠️'
+        diff_el.className = 'val late'
+
+    document.getElementById('sim-result').classList.add('show')
+    render_dashboard()
+    # 実績保存後、残りノルマでカレンダーを更新（翌日から登録）
+    js.autoSyncCalendar(task_id, 'cal-status', True)
+    # スプレッドシートに記録（非同期 fire & forget）
+    js.updateSheets(task_id, pages_int, minutes_int)
+
+# ---- タスク削除（JSから呼ばれる） ----
+def delete_task(task_id):
+    if not js.confirm('このタスクを削除しますか？\nGoogleカレンダーのイベントも同時に削除されます。'):
+        return
+    # カレンダーイベントを先に削除（非dawaitでfire & forget）
+    js.deleteCalendarEvents(task_id)
+    tasks = [t for t in get_tasks() if t['task_id'] != task_id]
+    save_tasks(tasks)
+    render_dashboard()
+
+# JSから呼び出せるようにグローバル登録
+import js
+js.deleteTask = delete_task
+
+# ---- 初期化 ----
+def init():
+    document.getElementById('py-loading').style.display = 'none'
+    document.getElementById('app').classList.add('ready')
+    render_dashboard()
+
+init()
+</script>
+
+</body>
+
+</html>
